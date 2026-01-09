@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Gloucester map</title>
+    
+
+  </head>
+    
+  <body>
+  <html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Interactive Traffic Enforcement Map</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        :root {
+            --color-yellow-box: #FFC107;
+            --color-prohibition: #D32F2F;
+            --color-banned-turn: #7B1FA2;
+            --color-cycle-lane: #1976D2;
+            --accent-color: #333333;
+        }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* UI Overlay */
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            padding: 8px;
+            border-radius: 100px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: #555;
+            padding: 10px 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-btn.active {
+            background: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 20px;
+            z-index: 10;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.05);
+            font-size: 13px;
+        }
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            color: #666;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .legend-key {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        /* Marker Styles */
+        .marker {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .marker-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pulse {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.5); opacity: 0.8; }
+            80%, 100% { transform: scale(4); opacity: 0; }
+        }
+
+        /* Custom Popup Styling */
+        .mapboxgl-popup-content {
+            background: #ffffff !important;
+            color: #333 !important;
+            border-radius: 12px !important;
+            padding: 15px !important;
+            border: none;
+            min-width: 180px;
+            max-width: 280px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.15) !important;
+        }
+        .popup-header {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 800;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .popup-description {
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.4;
+            display: block;
+            color: #333;
+        }
+        /* Ensure pointer events work for the marker element so hover/click works reliably */
+        .marker-container {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <button id="btn-gloucester" class="nav-btn active" onclick="flyToCity('gloucester')">Gloucester</button>
+    <button id="btn-cheltenham" class="nav-btn" onclick="flyToCity('cheltenham')">Cheltenham</button>
+</div>
+
+<div class="legend">
+    <div class="legend-title">Enforcement Type</div>
+    <div class="legend-item"><div class="legend-key" style="background: var(--color-yellow-box);"></div>Yellow Box Junction</div>
+    <div class="legend-item"><div class="legend-key" style="background: var(--color-prohibition);"></div>Prohibition of Vehicles</div>
+    <div class="legend-item"><div class="legend-key" style="background: var(--color-banned-turn);"></div>Banned Turn</div>
+    <div class="legend-item"><div class="legend-key" style="background: var(--color-cycle-lane);"></div>Cycle Lane</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoicHJvamVjdGNlbnRyZSIsImEiOiJja3o4OW9zYmowM3YwMm9tcWF0MTRtc3VyIn0.ns_jCyc8s6t6CS1w8SK6QQ';
+    
+    const config = {
+        gloucester: { center: [-2.245, 51.820], zoom: 11, pitch: 0, bearing: 0 },
+        cheltenham: { center: [-2.075, 51.902], zoom: 12, pitch: 0, bearing: 0 }
+    };
+
+    const categories = {
+        'YELLOW_BOX': { color: '#FFC107', label: 'Yellow Box Junction' },
+        'PROHIBITION': { color: '#D32F2F', label: 'Prohibition of Vehicles' },
+        'BANNED_TURN': { color: '#7B1FA2', label: 'Banned Turn' },
+        'CYCLE_LANE': { color: '#1976D2', label: 'Cycle Lane' }
+    };
+
+    const geoData = {
+        "features": [
+            { "properties": { "Bruton Way junction with Station Road, Gloucester – Yellow Box Junction": "" }, "geometry": { "coordinates": [-2.24067, 51.864665], "type": "Point" } },
+            { "properties": { "Northgate Street, Gloucester – Prohibition of Vehicles": "" }, "geometry": { "coordinates": [-2.243501, 51.86668], "type": "Point" } },
+            { "properties": { "Westgate Street, Gloucester – Prohibition of Vehicles": "" }, "geometry": { "coordinates": [-2.250767, 51.867512], "type": "Point" } },
+            { "properties": { "Shelburne Road junction with Lansdown Rd / A40, Cheltenham – Banned Right Turn": "" }, "geometry": { "coordinates": [-2.103343, 51.894747], "type": "Point" } },
+            { "properties": { "North Place, Fairview Road and St Margaret’s Road intersection, Cheltenham - Yellow Box Junction": "" }, "geometry": { "coordinates": [-2.07341, 51.902755], "type": "Point" } },
+            { "properties": { "Grove Lane junction into the A38 (southbound), Whitminster– Left Turn Only": "" }, "geometry": { "coordinates": [-2.325362, 51.770198], "type": "Point" } },
+            { "properties": { "Bruton Way junction with Markert Parade, Gloucester - Yellow Box Junction": "" }, "geometry": { "coordinates": [-2.240864, 51.866495], "type": "Point" } },
+            { "properties": { "Eastgate Street, Gloucester – Prohibition of Vehicles": "" }, "geometry": { "coordinates": [-2.242394, 51.863504], "type": "Point" } },
+            { "properties": { "M5 Quedgeley interchange junction with A430 Bath Road, Quedgeley – North and South bound Yellow Box Junctions": "" }, "geometry": { "coordinates": [-2.289203, 51.798822], "type": "Point" } },
+            { "properties": { "London Road, Gloucester – Cycle lane": "" }, "geometry": { "coordinates": [-2.237912, 51.867683], "type": "Point" } },
+            { "properties": { "M5 Quedgeley interchange junction with B4008, Quedgeley – Yello Box Junction": "" }, "geometry": { "coordinates": [-2.288345, 51.797478], "type": "Point" } },
+            { "properties": { "Southgate Street, Gloucester – Prohibition of Vehicles": "" }, "geometry": { "coordinates": [-2.249851, 51.861991], "type": "Point" } },
+            { "properties": { "Bus access into Cheltenham Transport Hub via Grovefield Way, Cheltenham - Prohibition of Vehicles": "" }, "geometry": { "coordinates": [-2.131955, 51.892909], "type": "Point" } },
+            { "properties": { "St Margaret’s Road/Oxford Passage – Yellow Box Junction": "" }, "geometry": { "coordinates": [-2.074861, 51.903481], "type": "Point" } }
+        ]
+    };
+
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/light-v11',
+        center: config.gloucester.center,
+        zoom: config.gloucester.zoom,
+        pitch: config.gloucester.pitch,
+        bearing: config.gloucester.bearing,
+        antialias: true
+    });
+
+    let pinnedMarker = null;
+
+    function getEnforcementType(desc) {
+        const lower = desc.toLowerCase();
+        if (lower.includes('yellow box')) return 'YELLOW_BOX';
+        if (lower.includes('prohibition of vehicles')) return 'PROHIBITION';
+        if (lower.includes('banned') || lower.includes('left turn only')) return 'BANNED_TURN';
+        if (lower.includes('cycle lane')) return 'CYCLE_LANE';
+        return 'YELLOW_BOX'; 
+    }
+
+    geoData.features.forEach(feature => {
+        const fullDesc = Object.keys(feature.properties)[0];
+        const typeKey = getEnforcementType(fullDesc);
+        const typeInfo = categories[typeKey];
+        
+        const el = document.createElement('div');
+        el.className = `marker-container`;
+        
+        const pulse = document.createElement('div');
+        pulse.className = 'pulse';
+        pulse.style.background = typeInfo.color;
+        
+        const dot = document.createElement('div');
+        dot.className = 'marker';
+        dot.style.background = typeInfo.color;
+
+        el.appendChild(pulse);
+        el.appendChild(dot);
+
+        // Updated Popup Content: Enforcement Type as Title, Full Description as Body
+        const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
+            .setHTML(`
+                <span class="popup-header" style="color: ${typeInfo.color};">
+                    ${typeInfo.label}
+                </span>
+                <span class="popup-description">
+                    ${fullDesc}
+                </span>
+            `);
+
+        const marker = new mapboxgl.Marker(el)
+            .setLngLat(feature.geometry.coordinates)
+            .setPopup(popup)
+            .addTo(map);
+
+        el.addEventListener('mouseenter', () => {
+            if (pinnedMarker !== marker) {
+                marker.togglePopup();
+            }
+        });
+
+        el.addEventListener('mouseleave', () => {
+            if (pinnedMarker !== marker) {
+                marker.getPopup().remove();
+            }
+        });
+
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (pinnedMarker && pinnedMarker !== marker) {
+                pinnedMarker.getPopup().remove();
+            }
+            if (pinnedMarker === marker) {
+                pinnedMarker = null;
+                marker.getPopup().remove();
+            } else {
+                pinnedMarker = marker;
+                if (!marker.getPopup().isOpen()) {
+                    marker.togglePopup();
+                }
+            }
+        });
+    });
+
+    map.on('click', () => {
+        if (pinnedMarker) {
+            pinnedMarker.getPopup().remove();
+            pinnedMarker = null;
+        }
+    });
+
+    function flyToCity(city) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${city}`).classList.add('active');
+
+        map.flyTo({
+            center: config[city].center,
+            zoom: config[city].zoom,
+            pitch: config[city].pitch,
+            bearing: config[city].bearing,
+            essential: true,
+            duration: 1200, // Faster transition (previously 3500)
+            speed: 1.5,      // Higher speed for a snappier feel
+            curve: 1
+        });
+    }
+
+    map.on('load', () => {
+        map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+    });
+</script>
+
+</body>
+</html>
+    
+  </body>
+  
+</html>
